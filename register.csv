@@ -1,0 +1,9 @@
+claim_id,matched_invoice,status_flag,note
+CLM-4401,INV-10432,CLEAN_MATCH,Matched by invoice_ref 'INV-10432'. Claimed 1180.00 vs invoiced 1180.00 (diff +0.00).
+CLM-4402,0088217,CLEAN_MATCH,Matched by invoice_ref '88217'. Claimed 642.50 vs invoiced 642.50 (diff +0.00).
+CLM-4403,INV-10501,AMOUNT_OVERSTATED,Matched by invoice_ref 'INV-10501'. Claimed 412.00 vs invoiced 380.00 (diff +32.00). Exceeds the 1.00 tolerance.
+CLM-4404,,AMBIGUOUS_NO_MATCH,"blank invoice_ref did not resolve; PO fallback: PO-5521 is shared by 2 ledger invoices (INV-10517, INV-10519). Amount not used to break the tie."
+CLM-4405,INV-10611,CLEAN_MATCH,Matched by invoice_ref 'INV-10611'. Claimed 300.00 vs invoiced 299.99 (diff +0.01).
+CLM-4406,INV-09988,OUT_OF_PERIOD,Matched by invoice_ref 'INV-09988'. Invoice date 2024-11-02 is outside 2025-01-01..2025-12-31 (claim filed 2025-01-10).
+CLM-4407,,PHANTOM,invoice_ref 'INV-99981' did not resolve and PO 'PO-5599' is not in the ledger.
+CLM-4408,INV-10600,CLEAN_MATCH,"invoice_ref 'INV-1O6OO' did not resolve; matched by PO fallback (PO-5530 -> INV-10600, the only ledger invoice on that PO). Claimed 1502.40 vs invoiced 1502.40 (diff +0.00)."
