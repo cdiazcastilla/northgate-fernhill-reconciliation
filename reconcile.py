@@ -2,13 +2,17 @@
 
 The ledger is ground truth; each claim is a hypothesis to be confirmed or rejected.
 
+pandas handles loading, data checks and totals. The matching rules are plain
+functions over one claim at a time, so each rule stays readable and testable.
+
 Usage:
     python reconcile.py [claims.csv] [ledger.csv] [register.csv]
 """
-import csv
 import re
 import sys
 from decimal import Decimal
+
+import pandas as pd
 
 AUDIT_START = "2025-01-01"
 AUDIT_END = "2025-12-31"
@@ -17,11 +21,14 @@ TOLERANCE = Decimal("1.00")
 REGISTER_FIELDS = ["claim_id", "matched_invoice", "status_flag", "note"]
 
 
+def load(path):
+    # dtype=str keeps "0088217" as text (no lost zeros); keep_default_na=False
+    # keeps a blank cell as "" instead of NaN.
+    return pd.read_csv(path, dtype=str, keep_default_na=False)
+
+
 def read_rows(path):
-    # csv.DictReader returns every field as a str, so invoice numbers such as
-    # "0088217" are never coerced to integers.
-    with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    return load(path).to_dict("records")
 
 
 def canon_invoice(raw):
@@ -108,21 +115,54 @@ def reconcile(claims, ledger):
     return register
 
 
+def data_checks(claims, ledger):
+    """Facts about the raw data worth knowing before trusting any match."""
+    po_counts = ledger["po_number"].value_counts()
+    out_of_window = ledger[(ledger["invoice_date"] < AUDIT_START) |
+                           (ledger["invoice_date"] > AUDIT_END)]
+    short_paid = ledger[ledger["paid_amount"].map(Decimal) !=
+                        ledger["invoice_amount"].map(Decimal)]
+    return [
+        f"{len(claims)} claims, {len(ledger)} ledger invoices",
+        f"claims with blank invoice_ref: {', '.join(claims.loc[claims['invoice_ref'] == '', 'claim_id']) or 'none'}",
+        f"POs shared by more than one ledger invoice: {', '.join(po_counts[po_counts > 1].index) or 'none'}",
+        f"ledger invoices outside the audit window: {', '.join(out_of_window['invoice_number']) or 'none'}",
+        f"ledger invoices without a payment: {(ledger['paid_date'] == '').sum()}",
+        f"ledger invoices not paid in full: {', '.join(short_paid['invoice_number']) or 'none'}",
+    ]
+
+
+def summarize(register, claims):
+    """Claim count and claimed amount per status_flag, summed exactly with Decimal."""
+    df = register.merge(claims[["claim_id", "claimed_amount"]], on="claim_id")
+    df["claimed_amount"] = df["claimed_amount"].map(Decimal)
+    summary = (df.groupby("status_flag", sort=False)
+                 .agg(claims=("claim_id", "count"), amount=("claimed_amount", "sum")))
+    summary.loc["TOTAL"] = [summary["claims"].sum(), df["claimed_amount"].sum()]
+    return summary
+
+
 def main(argv):
     claims_path = argv[1] if len(argv) > 1 else "fernhill_claims.csv"
     ledger_path = argv[2] if len(argv) > 2 else "northgate_ledger.csv"
     out_path = argv[3] if len(argv) > 3 else "register.csv"
 
-    register = reconcile(read_rows(claims_path), read_rows(ledger_path))
+    claims, ledger = load(claims_path), load(ledger_path)
 
-    with open(out_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=REGISTER_FIELDS)
-        writer.writeheader()
-        writer.writerows(register)
+    print("Data checks")
+    for line in data_checks(claims, ledger):
+        print(f"  - {line}")
 
-    writer = csv.DictWriter(sys.stdout, fieldnames=REGISTER_FIELDS, lineterminator="\n")
-    writer.writeheader()
-    writer.writerows(register)
+    register = pd.DataFrame(
+        reconcile(claims.to_dict("records"), ledger.to_dict("records")),
+        columns=REGISTER_FIELDS)
+    register.to_csv(out_path, index=False)
+
+    print("\nRegister")
+    print(register.to_csv(index=False), end="")
+
+    print("\nSummary by flag")
+    print(summarize(register, claims).to_string())
 
 
 if __name__ == "__main__":

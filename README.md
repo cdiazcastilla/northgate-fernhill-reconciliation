@@ -14,12 +14,12 @@ The **ledger is ground truth**; each **claim is a hypothesis** that is confirmed
 
 ## How to run
 
-Requires Python 3. The script uses only the standard library; pytest is needed for the tests. Run from the repo root.
+Requires Python 3. Run from the repo root.
 
 ```bash
-python reconcile.py          # prints the register and writes register.csv
-pip install -r requirements.txt
-pytest -v                    # 6 tests
+pip install -r requirements.txt   # pandas, pytest
+python reconcile.py               # data checks, register, summary by flag; writes register.csv
+pytest -v                         # 6 tests
 ```
 
 Optional arguments: `python reconcile.py [claims.csv] [ledger.csv] [register.csv]`.
@@ -41,7 +41,7 @@ Optional arguments: `python reconcile.py [claims.csv] [ledger.csv] [register.csv
 - **No OCR or fuzzy correction of invoice refs.** Rewriting the retailer's reference until it matches would be guessing.
 - **`Decimal` for money.** Float rounding (e.g. `1.0000000000000002`) can flip a result at the exact $1.00 edge.
 - **All fields read as text.** This keeps leading zeros (`0088217`), so the register reports the ledger's original value.
-- **Standard-library `csv` instead of pandas.** The case allows either, and with 8 rows there are fewer moving parts.
+- **pandas for loading, data checks and totals; plain functions for the rules.** Each rule stays readable and directly testable, one claim at a time.
 - **Duplicate canonical invoice keys in the ledger raise an error.** Silently keeping one row would be a guess.
 - **Dates are compared as ISO `YYYY-MM-DD` text**, which is the format of both files.
 

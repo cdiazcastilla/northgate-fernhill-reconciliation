@@ -323,11 +323,49 @@ and if another date format ever showed up, the period check would break.
 the case itself says "plain stdlib or pandas, your choice". With 8 rows I
 went with the standard library so there's less to install and less to go
 wrong. I wrote the reason in the README so the reviewer doesn't have to ask.
+(Later I added pandas for the analysis part. See Prompt 6.)
 
 **Result:** PR #4, `README.md` (about 400 words) and `requirements.txt` (just
 pytest). The AI ran every command in a fresh copy of the repo: the script
 printed the 8-row register and pytest gave 6 passed. `reconcile.py` and the
 tests were not touched.
+
+---
+
+## Prompt 6 — Adding pandas for the analysis
+
+**Prompt (translated from Spanish):**
+> Do it please. Don't they say the idea is to use pandas? Please review
+> everything we've done, and make any change it needs.
+
+**Why I came back to this:** there are two documents, and they say slightly
+different things. The case file says the script can be "plain stdlib or
+pandas, your choice", so in Prompt 1 I chose stdlib on purpose for the
+matching rules. The assessment brief lists "Use Python and pandas to analyze
+the datasets" as one of the things they expect to see. Before sending, I
+decided to cover both: keep the rules as small plain functions, and use
+pandas for the part the brief actually describes, which is loading and
+analyzing the data. My reason in Prompt 5 (8 rows, fewer moving parts) still
+applies to the rules. pandas now does the analysis around them.
+
+**What changed:**
+- Loading is now `pd.read_csv(path, dtype=str, keep_default_na=False)`. It's
+  the same idea as before: everything stays text, and blanks stay blank.
+- New **data checks** printed before the register, all done with pandas:
+  the blank invoice_ref (CLM-4404), the PO shared by two invoices (PO-5521),
+  the invoice outside 2025 (INV-09988), zero unpaid invoices, and the one
+  short payment (INV-10611). These are the traps I found by hand, now found by
+  the code.
+- New **summary by flag** after the register (count and amount, summed with
+  `Decimal`), which matches the table in the memo.
+- **What did not change:** the rules are still plain functions that look at
+  one claim at a time. I kept it that way on purpose, because that is what
+  the tests check directly.
+
+**How I checked it didn't break anything:** the new `register.csv` has the
+exact same 8 rows as before. The only difference is the line endings (Windows
+`\r\n` became `\n`). All 6 tests still pass. README and `requirements.txt`
+were updated to say pandas.
 
 ---
 
@@ -342,8 +380,10 @@ How I tried to steer the AI, mapped to what the case says it looks for:
   `grep`, asked for a test that is proven to fail when the logic guesses,
   and ran everything myself in my Codespace.
 - **Judgment:** the one-sided tolerance, CLM-4403 (concede $380, dispute
-  $32), CLM-4404 on hold instead of matched by amount, and stdlib over
-  pandas were all my decisions, and each one has its reason above.
+  $32), and CLM-4404 on hold instead of matched by amount were all my
+  decisions, and each one has its reason above. On stdlib vs pandas I read
+  both documents and ended up using each where it fits: plain functions for
+  the rules, pandas for loading and analysis.
 - **Ownership:** I threw away the first one-shot solution because I couldn't
-  defend it. Every result in this repo is one I can explain, and every PR was
-  reviewed and merged by me.
+  defend it. Every result in this repo is one I can explain, and I can walk
+  through every PR in the history and say why it's there.
