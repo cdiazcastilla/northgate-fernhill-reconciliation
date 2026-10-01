@@ -264,4 +264,86 @@ invoice exists, but not that the shortage happened.
 ---
 
 ## Prompt 5 — README
-_(next)_
+
+**Prompt (verbatim):**
+```
+Write README.md for the repo. Audience: the reviewer at The Hawkers Club who
+will clone it and wants to run it in 2 minutes and understand my approach.
+
+Include:
+1. What this is, in 2-3 lines: reconciling Fernhill's deduction claims against
+   Northgate's independent ledger>
+    ledger = ground truth
+    claims = hypotheses.
+2. Deliverables map: which file is each of the 4 deliverables (script +
+   register.csv, memo.md, test_reconcile.py, AI_LOG.md).
+3. How to run: exact commands for the script and for pytest. Add a
+   requirements.txt with only what is actually needed (pytest; the script
+   itself is stdlib only).
+4. Rules applied, in plain words and in the order the code checks them:
+   match by invoice
+   > PO fallback only if unique
+   > PHANTOM ->
+   > OUT_OF_PERIOD
+   > AMOUNT_OVERSTATED
+   > CLEAN_MATCH.
+5. Assumptions and decisions, each with a one-line reason:
+   - $1.00 tolerance is one-sided (claimed above invoice only)
+   - compared against invoice_amount, not paid_amount
+   - no OCR/fuzzy correction of invoice refs
+   - Decimal for money
+   - all fields read as text
+   - stdlib csv instead of pandas (case allows either; 8 rows, fewer moving
+     parts)
+   - duplicate canonical invoice keys in the ledger raise an error
+6. Results summary: one line with counts by flag and a link to memo.md.
+
+Constraints and guardrails:
+- Only describe what the code actually does.
+- If something in this prompt doesn't match the code, tell me instead of writing it.
+- Run every command you put in the README and show me the output.
+- Keep it short: a reviewer should read it in under 2 minutes.
+- Don't change reconcile.py or the tests.
+```
+
+**Why I wrote it like this:** a README that says something the code doesn't
+do is worse than no README. So I told the AI to check my own prompt against
+the code, and to run every command before writing it down.
+
+**The guardrail caught my mistake:** in my list of rules I forgot
+AMBIGUOUS_NO_MATCH. The AI told me, and it put it back in the right place,
+right after the PO fallback. That's the rule the whole exercise is built
+around, so I'm glad it didn't just copy my list.
+
+**Something the AI added that I didn't ask for:** one more assumption, "dates
+are compared as text in YYYY-MM-DD format". I kept it. It's true in the code,
+and if another date format ever showed up, the period check would break.
+
+**About pandas:** the general assessment brief says "Python and pandas", but
+the case itself says "plain stdlib or pandas, your choice". With 8 rows I
+went with the standard library so there's less to install and less to go
+wrong. I wrote the reason in the README so the reviewer doesn't have to ask.
+
+**Result:** PR #4, `README.md` (about 400 words) and `requirements.txt` (just
+pytest). The AI ran every command in a fresh copy of the repo: the script
+printed the 8-row register and pytest gave 6 passed. `reconcile.py` and the
+tests were not touched.
+
+---
+
+## Looking back
+
+How I tried to steer the AI, mapped to what the case says it looks for:
+
+- **Specification:** every prompt carried the real rules: the audit window,
+  the $1.00 tolerance, the ambiguous-PO guard, and the traps I had seen in the
+  data. I never just said "reconcile these files".
+- **Verification:** I checked all 8 claims by hand against the raw CSVs with
+  `grep`, asked for a test that is proven to fail when the logic guesses,
+  and ran everything myself in my Codespace.
+- **Judgment:** the one-sided tolerance, CLM-4403 (concede $380, dispute
+  $32), CLM-4404 on hold instead of matched by amount, and stdlib over
+  pandas were all my decisions, and each one has its reason above.
+- **Ownership:** I threw away the first one-shot solution because I couldn't
+  defend it. Every result in this repo is one I can explain, and every PR was
+  reviewed and merged by me.
