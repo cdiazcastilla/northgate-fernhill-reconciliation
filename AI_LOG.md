@@ -164,5 +164,186 @@ same register, 6 passed.
 
 ---
 
-## Prompt 3 — Memo and README
-_(next)_
+## Prompt 3 — Skeptical review before the memo
+
+**Prompt (verbatim):**
+```
+Before the memo, act as a skeptical reviewer. For each of the 8 claims, show
+the raw claim row, the ledger row(s) considered, and which rule fired. Then
+tell me any case where a reasonable reviewer could argue for a different flag,
+and why your choice follows the written rules. Don't change code unless you
+find an actual bug.
+```
+
+**Why I asked this:** the register looked right, but "looks right" isn't
+enough. Before writing a memo that tells Finance to concede or dispute real
+money, I wanted the AI to argue *against* its own results, so I could see if
+any flag was weak.
+
+**What came back:** a trace of all 8 claims with the raw rows, plus six
+possible objections. The ones I think matter most:
+- **CLM-4404:** "it's obviously INV-10517". This is the trap of the exercise.
+  The rule says no, and I agree: the amount comes from Fernhill, so using it
+  to choose the invoice is using the claim to prove itself.
+- **CLM-4408:** the opposite argument, "the invoice number doesn't exist, so
+  it's PHANTOM". But PHANTOM means *neither* the invoice *nor* the PO
+  resolves, and here the PO points to exactly one invoice. The match comes
+  from Northgate's ledger, not from Fernhill.
+- **CLM-4406:** "the claim is from 2025". The rule says the invoice date is
+  what counts. The amount matches exactly, so the flag depends only on the
+  date.
+- **CLM-4403:** "concede $380 and dispute only the $32". That's not a flag
+  question, it's a recommendation, so I took it to the memo.
+
+It also checked a few things I hadn't asked for: the claim PO matches the
+ledger PO for every matched claim, and no invoice is claimed twice.
+
+**Bug check:** no bug affects the 8 results, so no code changed. It found one
+edge case: an invoice made only of zeros (`INV-000`) would be treated as
+blank. That can't happen with this data and isn't realistic, so I left it
+alone.
+
+**The detail that changed my memo:** my earlier note said every invoice was
+already paid. The trace made it more precise:
+- 4401, 4406 and 4408 were paid *before* the claim arrived.
+- For 4402, 4403 and 4405, Fernhill filed the claim first and then paid the
+  invoice in full anyway.
+
+Either way, Fernhill is not deducting from an unpaid invoice.
+
+---
+
+## Prompt 4 — Findings memo
+
+**Prompt (verbatim):**
+```
+Write memo.md, max one page, for a non-technical finance reader who won't open
+the code.
+Include: counts and $ by flag (table), total claimed; recommendation per
+claim: concede CLEAN_MATCH; dispute PHANTOM and OUT_OF_PERIOD in full; for
+AMOUNT_OVERSTATED concede the ledger amount and dispute only the excess; for
+AMBIGUOUS request Fernhill provide the specific invoice number before any
+concession.
+Also note as observations: every ledger invoice shows as paid, which conflicts
+with Fernhill deducting against "unpaid" invoices; and INV-10611 was
+short-paid $0.02.
+Plain language, no code references.
+```
+
+**Decisions that were mine, not the AI's:**
+- **CLM-4403:** concede the $380 invoice value and dispute only the $32
+  excess. The ledger confirms the invoice exists and that $380 was billed, so
+  the real problem is only the part above it. A SHORTAGE can't be bigger
+  than the whole invoice, which is exactly why that part is disputed.
+- **CLM-4404:** "on hold", not disputed and not conceded. The claim could be
+  valid, but nobody can say which invoice it's about. The fair next step is
+  to ask Fernhill for the invoice number.
+- **The two observations** (all invoices paid, the $0.02 short payment) came
+  from my own check of the ledger and from the Prompt 3 trace.
+
+**Result:** PR #3, `memo.md`, about 575 words.
+
+| | Amount |
+|---|---:|
+| Concede | $4,004.90 |
+| Dispute | $1,437.00 |
+| On hold (CLM-4404) | $915.75 |
+| **Total claimed** | **$6,357.65** |
+
+**How I checked it:** the totals were recalculated from the CSVs, not typed
+from memory, and concede + dispute + hold adds up to the total claimed. The
+AI also confirmed from the data that *no* ledger invoice is unpaid and that
+INV-10611 is the *only* short payment.
+
+**Something the AI added that I didn't ask for:** a third observation. The
+conceded claims are each close to 100% of their invoice, so Northgate should
+ask for proof (proof of delivery, price agreement) before issuing credit. I
+kept it. It follows from the governing rule: the ledger confirms that the
+invoice exists, but not that the shortage happened.
+
+---
+
+## Prompt 5 — README
+
+**Prompt (verbatim):**
+```
+Write README.md for the repo. Audience: the reviewer at The Hawkers Club who
+will clone it and wants to run it in 2 minutes and understand my approach.
+
+Include:
+1. What this is, in 2-3 lines: reconciling Fernhill's deduction claims against
+   Northgate's independent ledger>
+    ledger = ground truth
+    claims = hypotheses.
+2. Deliverables map: which file is each of the 4 deliverables (script +
+   register.csv, memo.md, test_reconcile.py, AI_LOG.md).
+3. How to run: exact commands for the script and for pytest. Add a
+   requirements.txt with only what is actually needed (pytest; the script
+   itself is stdlib only).
+4. Rules applied, in plain words and in the order the code checks them:
+   match by invoice
+   > PO fallback only if unique
+   > PHANTOM ->
+   > OUT_OF_PERIOD
+   > AMOUNT_OVERSTATED
+   > CLEAN_MATCH.
+5. Assumptions and decisions, each with a one-line reason:
+   - $1.00 tolerance is one-sided (claimed above invoice only)
+   - compared against invoice_amount, not paid_amount
+   - no OCR/fuzzy correction of invoice refs
+   - Decimal for money
+   - all fields read as text
+   - stdlib csv instead of pandas (case allows either; 8 rows, fewer moving
+     parts)
+   - duplicate canonical invoice keys in the ledger raise an error
+6. Results summary: one line with counts by flag and a link to memo.md.
+
+Constraints and guardrails:
+- Only describe what the code actually does.
+- If something in this prompt doesn't match the code, tell me instead of writing it.
+- Run every command you put in the README and show me the output.
+- Keep it short: a reviewer should read it in under 2 minutes.
+- Don't change reconcile.py or the tests.
+```
+
+**Why I wrote it like this:** a README that says something the code doesn't
+do is worse than no README. So I told the AI to check my own prompt against
+the code, and to run every command before writing it down.
+
+**The guardrail caught my mistake:** in my list of rules I forgot
+AMBIGUOUS_NO_MATCH. The AI told me, and it put it back in the right place,
+right after the PO fallback. That's the rule the whole exercise is built
+around, so I'm glad it didn't just copy my list.
+
+**Something the AI added that I didn't ask for:** one more assumption, "dates
+are compared as text in YYYY-MM-DD format". I kept it. It's true in the code,
+and if another date format ever showed up, the period check would break.
+
+**About pandas:** the general assessment brief says "Python and pandas", but
+the case itself says "plain stdlib or pandas, your choice". With 8 rows I
+went with the standard library so there's less to install and less to go
+wrong. I wrote the reason in the README so the reviewer doesn't have to ask.
+
+**Result:** PR #4, `README.md` (about 400 words) and `requirements.txt` (just
+pytest). The AI ran every command in a fresh copy of the repo: the script
+printed the 8-row register and pytest gave 6 passed. `reconcile.py` and the
+tests were not touched.
+
+---
+
+## Looking back
+
+How I tried to steer the AI, mapped to what the case says it looks for:
+
+- **Specification:** every prompt carried the real rules: the audit window,
+  the $1.00 tolerance, the ambiguous-PO guard, and the traps I had seen in the
+  data. I never just said "reconcile these files".
+- **Verification:** I checked all 8 claims by hand against the raw CSVs with
+  `grep`, asked for a test that is proven to fail when the logic guesses,
+  and ran everything myself in my Codespace.
+- **Judgment:** the one-sided tolerance, CLM-4403 (concede $380, dispute
+  $32), CLM-4404 on hold instead of matched by amount, and stdlib over
+  pandas were all my decisions, and each one has its reason above.
+- **Ownership:** I threw away the first one-shot solution because I couldn't
+  defend it. Every result in this repo is one I can explain, and every PR was
+  reviewed and merged by me.
