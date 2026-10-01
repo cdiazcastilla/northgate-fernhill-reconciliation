@@ -164,5 +164,104 @@ same register, 6 passed.
 
 ---
 
-## Prompt 3 — Memo and README
+## Prompt 3 — Skeptical review before the memo
+
+**Prompt (verbatim):**
+```
+Before the memo, act as a skeptical reviewer. For each of the 8 claims, show
+the raw claim row, the ledger row(s) considered, and which rule fired. Then
+tell me any case where a reasonable reviewer could argue for a different flag,
+and why your choice follows the written rules. Don't change code unless you
+find an actual bug.
+```
+
+**Why I asked this:** the register looked right, but "looks right" isn't
+enough. Before writing a memo that tells Finance to concede or dispute real
+money, I wanted the AI to argue *against* its own results, so I could see if
+any flag was weak.
+
+**What came back:** a trace of all 8 claims with the raw rows, plus six
+possible objections. The ones I think matter most:
+- **CLM-4404:** "it's obviously INV-10517". This is the trap of the exercise.
+  The rule says no, and I agree: the amount comes from Fernhill, so using it
+  to choose the invoice is using the claim to prove itself.
+- **CLM-4408:** the opposite argument, "the invoice number doesn't exist, so
+  it's PHANTOM". But PHANTOM means *neither* the invoice *nor* the PO
+  resolves, and here the PO points to exactly one invoice. The match comes
+  from Northgate's ledger, not from Fernhill.
+- **CLM-4406:** "the claim is from 2025". The rule says the invoice date is
+  what counts. The amount matches exactly, so the flag depends only on the
+  date.
+- **CLM-4403:** "concede $380 and dispute only the $32". That's not a flag
+  question, it's a recommendation, so I took it to the memo.
+
+It also checked a few things I hadn't asked for: the claim PO matches the
+ledger PO for every matched claim, and no invoice is claimed twice.
+
+**Bug check:** no bug affects the 8 results, so no code changed. It found one
+edge case: an invoice made only of zeros (`INV-000`) would be treated as
+blank. That can't happen with this data and isn't realistic, so I left it
+alone.
+
+**The detail that changed my memo:** my earlier note said every invoice was
+already paid. The trace made it more precise:
+- 4401, 4406 and 4408 were paid *before* the claim arrived.
+- For 4402, 4403 and 4405, Fernhill filed the claim first and then paid the
+  invoice in full anyway.
+
+Either way, Fernhill is not deducting from an unpaid invoice.
+
+---
+
+## Prompt 4 — Findings memo
+
+**Prompt (verbatim):**
+```
+Write memo.md, max one page, for a non-technical finance reader who won't open
+the code.
+Include: counts and $ by flag (table), total claimed; recommendation per
+claim: concede CLEAN_MATCH; dispute PHANTOM and OUT_OF_PERIOD in full; for
+AMOUNT_OVERSTATED concede the ledger amount and dispute only the excess; for
+AMBIGUOUS request Fernhill provide the specific invoice number before any
+concession.
+Also note as observations: every ledger invoice shows as paid, which conflicts
+with Fernhill deducting against "unpaid" invoices; and INV-10611 was
+short-paid $0.02.
+Plain language, no code references.
+```
+
+**Decisions that were mine, not the AI's:**
+- **CLM-4403:** concede the $380 invoice value and dispute only the $32
+  excess. The ledger confirms the invoice exists and that $380 was billed, so
+  the real problem is only the part above it. A SHORTAGE can't be bigger
+  than the whole invoice, which is exactly why that part is disputed.
+- **CLM-4404:** "on hold", not disputed and not conceded. The claim could be
+  valid, but nobody can say which invoice it's about. The fair next step is
+  to ask Fernhill for the invoice number.
+- **The two observations** (all invoices paid, the $0.02 short payment) came
+  from my own check of the ledger and from the Prompt 3 trace.
+
+**Result:** PR #3, `memo.md`, about 575 words.
+
+| | Amount |
+|---|---:|
+| Concede | $4,004.90 |
+| Dispute | $1,437.00 |
+| On hold (CLM-4404) | $915.75 |
+| **Total claimed** | **$6,357.65** |
+
+**How I checked it:** the totals were recalculated from the CSVs, not typed
+from memory, and concede + dispute + hold adds up to the total claimed. The
+AI also confirmed from the data that *no* ledger invoice is unpaid and that
+INV-10611 is the *only* short payment.
+
+**Something the AI added that I didn't ask for:** a third observation. The
+conceded claims are each close to 100% of their invoice, so Northgate should
+ask for proof (proof of delivery, price agreement) before issuing credit. I
+kept it. It follows from the governing rule: the ledger confirms that the
+invoice exists, but not that the shortage happened.
+
+---
+
+## Prompt 5 — README
 _(next)_
